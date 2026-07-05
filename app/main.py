@@ -59,7 +59,7 @@ def health() -> dict:
 def run_agent(req: AgentRequest) -> AgentResponse:
     try:
         return agent.run(req.request, req.session_id)
-    except Exception as exc:  # noqa: BLE001 - surface a clean error to the client
+    except Exception as exc:
         logging.exception("agent run failed")
         raise HTTPException(status_code=500, detail=f"Agent failed: {exc}")
 

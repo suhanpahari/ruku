@@ -32,10 +32,6 @@ DOC_TYPES = [
     "product specification",
 ]
 
-# ---------------------------------------------------------------------------
-# helpers
-# ---------------------------------------------------------------------------
-
 
 def _as_str_list(value) -> List[str]:
     if isinstance(value, list):
@@ -63,11 +59,6 @@ def _normalize_content(raw: dict) -> Dict[str, List[str]]:
         "paragraphs": _as_str_list(raw.get("paragraphs")) or ["(no content generated)"],
         "bullets": _as_str_list(raw.get("bullets")),
     }
-
-
-# ---------------------------------------------------------------------------
-# Groq provider
-# ---------------------------------------------------------------------------
 
 
 class GroqProvider:
@@ -168,11 +159,6 @@ class GroqProvider:
         return {"notes": _as_str_list(data.get("notes")), "revised_sections": revised}
 
 
-# ---------------------------------------------------------------------------
-# Offline (deterministic) provider
-# ---------------------------------------------------------------------------
-
-# Word-boundary phrases that signal an ambiguous / under-specified request.
 _AMBIGUOUS_MARKERS = (
     "maybe",
     "not sure",
@@ -270,7 +256,7 @@ def _clean_title(request: str, doc_type: str) -> str:
                 text = text[len(prefix):]
                 low = text.lower()
                 changed = True
-    if len(text) > 60:  # cut on a word boundary
+    if len(text) > 60:
         text = text[:60].rsplit(" ", 1)[0] + "…"
     text = text[:1].upper() + text[1:] if text else doc_type.title()
     return f"{text} — {doc_type.title()}"
@@ -446,17 +432,12 @@ def _normalize_plan(data: dict, request: str) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Resilient wrapper: retries + fallback to offline
-# ---------------------------------------------------------------------------
-
-
 class ResilientLLM:
     def __init__(self, primary, fallback: OfflineProvider, attempts: int) -> None:
         self.primary = primary
         self.fallback = fallback
         self.attempts = max(1, attempts)
-        self.fallbacks = 0  # number of times we fell back during the current run
+        self.fallbacks = 0
 
     def reset(self) -> None:
         self.fallbacks = 0
@@ -468,7 +449,7 @@ class ResilientLLM:
         for attempt in range(self.attempts):
             try:
                 return getattr(self.primary, method)(*args)
-            except Exception as err:  # noqa: BLE001 - deliberate broad catch for resilience
+            except Exception as err:
                 last_err = err
                 log.warning("primary LLM %s failed (attempt %d): %s", method, attempt + 1, err)
                 time.sleep(min(2 ** attempt, 4))

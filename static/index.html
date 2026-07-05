@@ -35,12 +35,10 @@
     .detail { color:var(--muted); font-size:0.85rem; }
     code { background:#242a3a; padding:1px 6px; border-radius:5px; font-size:0.85rem; }
 
-    /* ---- download button (fixed: single styled anchor, no nested <button>) ---- */
     .dl-btn { display:inline-flex; align-items:center; gap:7px; background:var(--ok); color:#fff;
               text-decoration:none; border-radius:9px; padding:11px 18px; font-size:0.95rem; font-weight:600; }
     .dl-btn:hover { filter:brightness(1.08); }
 
-    /* ---- "thinking" animation ---- */
     @keyframes spin { to { transform:rotate(360deg); } }
     @keyframes fadeUp { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:none; } }
     @keyframes blink { 0%,100% { opacity:.25; } 50% { opacity:1; } }
@@ -84,7 +82,6 @@
 
     go.addEventListener("click", run);
 
-    // ----- animated "thinking" panel while the agent works -----
     const PHASES = [
       ["🧠", "Interpreting your request"],
       ["🗂️", "Choosing the best document type"],
@@ -102,7 +99,6 @@
       const host = $("thoughts");
       let i = 0;
       const add = () => {
-        // finalise the previously active thought
         const prev = host.querySelector(".thought.active");
         if (prev) {
           prev.classList.replace("active", "done");

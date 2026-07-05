@@ -32,7 +32,7 @@ class PlanStep(BaseModel):
 
     id: str
     title: str
-    kind: str  # interpret | outline | draft | reflect | assemble
+    kind: str
     status: Literal["pending", "running", "done", "failed", "skipped"] = "pending"
     detail: Optional[str] = None
 

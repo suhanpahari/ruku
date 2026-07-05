@@ -34,7 +34,6 @@ def build_document(
     run.font.size = Pt(13)
     run.font.color.rgb = RGBColor(0x55, 0x55, 0x55)
 
-    # Metadata table
     meta = [
         ("Document type", doc_type.title()),
         ("Generated (UTC)", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M")),
@@ -52,7 +51,6 @@ def build_document(
                 r.bold = True
     doc.add_paragraph()
 
-    # Body sections
     for sec in sections:
         doc.add_heading(sec["name"], level=1)
         for para in sec.get("paragraphs", []):
@@ -60,7 +58,6 @@ def build_document(
         for bullet in sec.get("bullets", []):
             doc.add_paragraph(bullet, style="List Bullet")
 
-    # Appendix: assumptions + agent self-check notes
     if assumptions:
         doc.add_heading("Assumptions", level=1)
         for item in assumptions:
