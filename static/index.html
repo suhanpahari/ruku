@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RUKU — Autonomous Document Agent</title>
+  <style>
+    :root { --bg:#0f1117; --card:#1a1d27; --line:#2a2f3d; --fg:#e8eaf0; --muted:#9aa2b4; --accent:#6d8bff; --ok:#3fb96b; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+           background: var(--bg); color: var(--fg); line-height:1.5; }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 32px 20px 64px; }
+    h1 { margin:0 0 4px; font-size: 1.7rem; }
+    .sub { color: var(--muted); margin:0 0 24px; }
+    textarea { width:100%; min-height:120px; resize:vertical; padding:12px 14px;
+               background:var(--card); border:1px solid var(--line); border-radius:10px;
+               color:var(--fg); font-size:0.98rem; }
+    .row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin:12px 0; }
+    button { cursor:pointer; border:none; border-radius:9px; padding:11px 18px; font-size:0.95rem; font-weight:600; }
+    .primary { background:var(--accent); color:#fff; }
+    .primary:disabled { opacity:.55; cursor:progress; }
+    .chip { background:var(--card); border:1px solid var(--line); color:var(--muted); font-weight:500; }
+    .chip:hover { color:var(--fg); border-color:var(--accent); }
+    .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:18px 20px; margin-top:20px; }
+    .card h2 { margin:0 0 10px; font-size:1.05rem; display:flex; align-items:center; gap:10px; }
+    ul.plan { list-style:none; padding:0; margin:0; }
+    ul.plan li { display:flex; align-items:flex-start; gap:10px; padding:6px 0; border-bottom:1px solid var(--line); }
+    ul.plan li:last-child { border-bottom:none; }
+    .tick { color:var(--ok); font-weight:700; }
+    .meta { color:var(--muted); font-size:0.86rem; }
+    .pill { display:inline-block; background:#242a3a; border:1px solid var(--line); border-radius:999px;
+            padding:2px 10px; font-size:0.78rem; color:var(--muted); }
+    .err { border-color:#c0392b; color:#ff9b8f; }
+    .hidden { display:none; }
+    .detail { color:var(--muted); font-size:0.85rem; }
+    code { background:#242a3a; padding:1px 6px; border-radius:5px; font-size:0.85rem; }
+
+    /* ---- download button (fixed: single styled anchor, no nested <button>) ---- */
+    .dl-btn { display:inline-flex; align-items:center; gap:7px; background:var(--ok); color:#fff;
+              text-decoration:none; border-radius:9px; padding:11px 18px; font-size:0.95rem; font-weight:600; }
+    .dl-btn:hover { filter:brightness(1.08); }
+
+    /* ---- "thinking" animation ---- */
+    @keyframes spin { to { transform:rotate(360deg); } }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(7px); } to { opacity:1; transform:none; } }
+    @keyframes blink { 0%,100% { opacity:.25; } 50% { opacity:1; } }
+    .loader { width:15px; height:15px; border:2px solid var(--line); border-top-color:var(--accent);
+              border-radius:50%; animation:spin .8s linear infinite; }
+    ul.thinking { list-style:none; padding:0; margin:4px 0 0; }
+    .thought { display:flex; align-items:center; gap:11px; padding:8px 0;
+               opacity:0; animation:fadeUp .45s ease forwards; color:var(--muted); }
+    .thought .ic { width:20px; text-align:center; font-size:1.05rem; }
+    .thought.active { color:var(--fg); }
+    .thought.done { color:var(--fg); }
+    .thought .tail { margin-left:auto; color:var(--ok); font-weight:700; }
+    .ell { display:inline-flex; gap:3px; align-items:center; }
+    .ell i { width:4px; height:4px; border-radius:50%; background:var(--accent); animation:blink 1.2s infinite; }
+    .ell i:nth-child(2) { animation-delay:.2s; }
+    .ell i:nth-child(3) { animation-delay:.4s; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🤖 RUKU</h1>
+    <p class="sub">Autonomous agent → it plans its own TODO list, drafts each section, self-checks, and produces a Word (.docx) document.</p>
+
+    <textarea id="req" placeholder="Describe the document you want…"></textarea>
+    <div class="row">
+      <button class="primary" id="go">Generate document</button>
+      <button class="chip" data-ex="Write a business proposal for a mobile app that helps small cafés run loyalty programs.">Example: standard</button>
+      <button class="chip" data-ex="We have a client meeting next week — maybe put together a project plan or a short report. Budget is tight and the timeline isn't set. Decide what makes sense and draft it.">Example: complex / ambiguous</button>
+    </div>
+
+    <div id="status" class="card hidden"></div>
+    <div id="result" class="card hidden"></div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const req = $("req"), go = $("go"), statusBox = $("status"), result = $("result");
+
+    document.querySelectorAll(".chip[data-ex]").forEach(b =>
+      b.addEventListener("click", () => { req.value = b.dataset.ex; req.focus(); }));
+
+    go.addEventListener("click", run);
+
+    // ----- animated "thinking" panel while the agent works -----
+    const PHASES = [
+      ["🧠", "Interpreting your request"],
+      ["🗂️", "Choosing the best document type"],
+      ["🧩", "Planning the section outline"],
+      ["✍️", "Drafting each section"],
+      ["🔍", "Self-checking &amp; revising the draft"],
+      ["📄", "Assembling your Word document"],
+    ];
+    let thinkTimer = null;
+
+    function startThinking() {
+      statusBox.className = "card";
+      statusBox.innerHTML =
+        `<h2>RUKU is thinking <span class="loader"></span></h2><ul class="thinking" id="thoughts"></ul>`;
+      const host = $("thoughts");
+      let i = 0;
+      const add = () => {
+        // finalise the previously active thought
+        const prev = host.querySelector(".thought.active");
+        if (prev) {
+          prev.classList.replace("active", "done");
+          const ell = prev.querySelector(".ell"); if (ell) ell.remove();
+          prev.querySelector(".tail").textContent = "✓";
+        }
+        if (i >= PHASES.length) { clearInterval(thinkTimer); thinkTimer = null; return; }
+        const [ic, txt] = PHASES[i++];
+        const li = document.createElement("li");
+        li.className = "thought active";
+        li.innerHTML =
+          `<span class="ic">${ic}</span><span class="txt">${txt}</span>` +
+          `<span class="ell"><i></i><i></i><i></i></span><span class="tail"></span>`;
+        host.appendChild(li);
+      };
+      add();
+      thinkTimer = setInterval(add, 1900);
+    }
+
+    function stopThinking() { if (thinkTimer) { clearInterval(thinkTimer); thinkTimer = null; } }
+
+    async function run() {
+      const text = req.value.trim();
+      if (!text) { req.focus(); return; }
+      go.disabled = true; go.textContent = "Thinking…";
+      result.className = "card hidden";
+      startThinking();
+
+      try {
+        const r = await fetch("/agent", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ request: text })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.detail || ("HTTP " + r.status));
+        stopThinking();
+        render(data);
+      } catch (e) {
+        stopThinking();
+        statusBox.className = "card err";
+        statusBox.innerHTML = `<h2>Something went wrong</h2><p>${escapeHtml(String(e.message || e))}</p>`;
+      } finally {
+        go.disabled = false; go.textContent = "Generate document";
+      }
+    }
+
+    function render(d) {
+      const steps = d.plan.map(s => `
+        <li><span class="tick">${s.status === "done" ? "✓" : "•"}</span>
+          <div><div>${escapeHtml(s.title)}</div>
+          ${s.detail ? `<div class="detail">${escapeHtml(s.detail)}</div>` : ""}</div></li>`).join("");
+
+      show(statusBox, `
+        <h2>Agent plan <span class="pill">${escapeHtml(d.provider)}</span></h2>
+        <ul class="plan">${steps}</ul>`);
+
+      const assumptions = (d.assumptions || []).map(a => `<li>${escapeHtml(a)}</li>`).join("");
+      const notes = (d.reflection_notes || []).map(n => `<li>${escapeHtml(n)}</li>`).join("");
+
+      result.className = "card";
+      result.innerHTML = `
+        <h2>${escapeHtml(d.title)} <span class="pill">${escapeHtml(d.document_type)}</span></h2>
+        <p>${escapeHtml(d.summary)}</p>
+        ${assumptions ? `<p class="meta">Assumptions the agent made:</p><ul>${assumptions}</ul>` : ""}
+        ${notes ? `<p class="meta">Self-check notes:</p><ul>${notes}</ul>` : ""}
+        <div class="row" style="margin-top:16px">
+          <a class="dl-btn" href="${d.download_url}" download>⬇ Download .docx</a>
+          <span class="pill">id: ${escapeHtml(d.document_id)}</span>
+        </div>`;
+    }
+
+    function show(el, html) { el.className = "card"; el.innerHTML = html; }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c =>
+        ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" }[c]));
+    }
+  </script>
+</body>
+</html>
